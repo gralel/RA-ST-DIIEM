@@ -1,0 +1,22 @@
+{
+  "dataset_name": "RA-ST-DiffTEM paired synthetic TEM benchmark",
+  "version": "1.0",
+  "seed": 20260428,
+  "sample_shape": [11, 869],
+  "sample_count": 25000,
+  "splits": {"train": 20000, "validation": 2500, "test": 2500},
+  "fixed_test_scenarios": [
+    "colored_background",
+    "drift",
+    "dropout_missing_segment",
+    "em_interference",
+    "impulse_spike",
+    "light_gaussian",
+    "local_receiver_corruption",
+    "low_snr_gaussian",
+    "mixed_complex_noise",
+    "unseen_noise_combination"
+  ],
+  "model_level_split_overlap": 0,
+  "license": "CC-BY-4.0"
+}
