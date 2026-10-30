@@ -188,12 +188,12 @@ def load_array(path: Path) -> np.ndarray:
 def canonicalize_11t(array: np.ndarray, name: str) -> np.ndarray:
     arr = np.asarray(array, dtype=np.float32)
     if arr.ndim != 3:
-        raise ValueError(f"{name}: expected 3D array (N,11,T), got {arr.shape}")
-    if arr.shape[1] == 11:
+        raise ValueError(f"{name}: expected 3D array (N,R,T), got {arr.shape}")
+    if arr.shape[2] == 869:
         return arr
-    if arr.shape[2] == 11:
+    if arr.shape[1] == 869:
         return np.transpose(arr, (0, 2, 1))
-    raise ValueError(f"{name}: unsupported shape {arr.shape}, expected one axis to be 11")
+    raise ValueError(f"{name}: unsupported shape {arr.shape}, expected one time axis of length 869")
 
 
 def limit_samples(array: np.ndarray, max_samples: int | None) -> np.ndarray:
@@ -280,10 +280,11 @@ def evaluate_model(
 ) -> MetricPack:
     model.eval()
 
-    losses: list[float] = []
-    rmses: list[float] = []
-    rrmses: list[float] = []
-    snrs: list[float] = []
+    n_samples = 0
+    loss_sum = 0.0
+    rmse_sum = 0.0
+    rrmse_sum = 0.0
+    snr_sum = 0.0
 
     with torch.no_grad():
         for noisy, clean in loader:
@@ -291,17 +292,19 @@ def evaluate_model(
             clean = clean.to(device, non_blocking=True)
             pred = model(noisy)
             total_loss, _ = compute_training_loss(pred, clean, loss_config)
-            losses.append(float(total_loss.item()))
+            batch_size = int(clean.shape[0])
+            n_samples += batch_size
+            loss_sum += float(total_loss.item()) * batch_size
             rmse, rrmse, snr = compute_metrics_batch(pred, clean)
-            rmses.append(float(rmse.mean().item()))
-            rrmses.append(float(rrmse.mean().item()))
-            snrs.append(float(snr.mean().item()))
+            rmse_sum += float(rmse.sum().item())
+            rrmse_sum += float(rrmse.sum().item())
+            snr_sum += float(snr.sum().item())
 
     return MetricPack(
-        loss=float(np.mean(losses)),
-        rmse=float(np.mean(rmses)),
-        rrmse=float(np.mean(rrmses)),
-        snr=float(np.mean(snrs)),
+        loss=loss_sum / n_samples if n_samples else float("nan"),
+        rmse=rmse_sum / n_samples if n_samples else float("nan"),
+        rrmse=rrmse_sum / n_samples if n_samples else float("nan"),
+        snr=snr_sum / n_samples if n_samples else float("nan"),
     )
 
 

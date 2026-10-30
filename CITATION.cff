@@ -3,7 +3,6 @@ message: "If you use this software or dataset, please cite the accompanying pape
 title: "RA-ST-DiffTEM"
 type: software
 version: 0.1.0
-date-released: 2026-07-26
 authors:
   - family-names: Wang
     given-names: Haoran

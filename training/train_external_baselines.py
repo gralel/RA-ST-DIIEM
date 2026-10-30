@@ -201,28 +201,38 @@ def compute_metrics_batch(
     return rmse_sample, rrmse_sample, snr_sample
 
 
-def evaluate_model(model: nn.Module, loader: DataLoader, device: torch.device) -> MetricPack:
+def evaluate_model(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+    sample_rrmse_sink: list[np.ndarray] | None = None,
+) -> MetricPack:
     criterion = nn.MSELoss()
     model.eval()
-    losses: list[float] = []
-    rmses: list[float] = []
-    rrmses: list[float] = []
-    snrs: list[float] = []
+    n_samples = 0
+    loss_sum = 0.0
+    rmse_sum = 0.0
+    rrmse_sum = 0.0
+    snr_sum = 0.0
     with torch.no_grad():
         for noisy, clean in loader:
             noisy = noisy.to(device, non_blocking=True)
             clean = clean.to(device, non_blocking=True)
             pred = model(noisy)
-            losses.append(float(criterion(pred, clean).item()))
+            batch_size = int(clean.shape[0])
+            n_samples += batch_size
+            loss_sum += float(criterion(pred, clean).item()) * batch_size
             rmse, rrmse, snr = compute_metrics_batch(pred, clean)
-            rmses.append(float(rmse.mean().item()))
-            rrmses.append(float(rrmse.mean().item()))
-            snrs.append(float(snr.mean().item()))
+            if sample_rrmse_sink is not None:
+                sample_rrmse_sink.append(rrmse.detach().cpu().numpy())
+            rmse_sum += float(rmse.sum().item())
+            rrmse_sum += float(rrmse.sum().item())
+            snr_sum += float(snr.sum().item())
     return MetricPack(
-        loss=float(np.mean(losses)) if losses else float("nan"),
-        rmse=float(np.mean(rmses)) if rmses else float("nan"),
-        rrmse=float(np.mean(rrmses)) if rrmses else float("nan"),
-        snr=float(np.mean(snrs)) if snrs else float("nan"),
+        loss=loss_sum / n_samples if n_samples else float("nan"),
+        rmse=rmse_sum / n_samples if n_samples else float("nan"),
+        rrmse=rrmse_sum / n_samples if n_samples else float("nan"),
+        snr=snr_sum / n_samples if n_samples else float("nan"),
     )
 
 
@@ -380,7 +390,10 @@ def evaluate_and_write_scenarios(
     if test_data.exists() and test_labels.exists():
         dataset, shape = build_dataset(test_data, test_labels, limit)
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, **loader_kwargs)
-        metrics = evaluate_model(model, loader, device)
+        sample_rrmse: list[np.ndarray] = []
+        metrics = evaluate_model(model, loader, device, sample_rrmse_sink=sample_rrmse)
+        sample_dir = ensure_dir(output_dir / "sample_metrics")
+        np.savez_compressed(sample_dir / "combined_test.npz", rrmse=np.concatenate(sample_rrmse))
         combined = {"shape": list(shape), "sample_count": int(shape[0]), "metrics": metrics.to_dict()}
         save_json(output_dir / "test_metrics.json", {"test_shape": list(shape), "metrics": metrics.to_dict()})
         print(f"[{model_name}:combined_test] rrmse={metrics.rrmse:.6f} snr={metrics.snr:.3f}")
@@ -392,7 +405,10 @@ def evaluate_and_write_scenarios(
         data_path, label_path = scenario_paths(data_root, slug)
         dataset, shape = build_dataset(data_path, label_path, limit)
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, **loader_kwargs)
-        metrics = evaluate_model(model, loader, device)
+        sample_rrmse = []
+        metrics = evaluate_model(model, loader, device, sample_rrmse_sink=sample_rrmse)
+        sample_dir = ensure_dir(output_dir / "sample_metrics")
+        np.savez_compressed(sample_dir / f"{slug}.npz", rrmse=np.concatenate(sample_rrmse))
         scenario_results[slug] = {
             "scenario_name": str(spec.get("name", slug)),
             "shape": list(shape),
@@ -430,7 +446,11 @@ def evaluate_and_write_scenarios(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=("tem1dformer869", "dncnn2d"), required=True)
+    parser.add_argument(
+        "--model",
+        choices=("tem1dformer869", "dncnn2d", "temdnet_style", "temnlnet_style", "joint_gated_moe"),
+        required=True,
+    )
     parser.add_argument("--train-data", type=Path, required=True)
     parser.add_argument("--train-labels", type=Path, required=True)
     parser.add_argument("--val-data", type=Path, required=True)
@@ -455,6 +475,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--hidden-channels-2d", type=int, default=64)
     parser.add_argument("--depth-2d", type=int, default=8)
+    parser.add_argument("--filters", type=int, default=16)
+    parser.add_argument("--lstm-hidden", type=int, default=32)
+    parser.add_argument("--lstm-layers", type=int, default=2)
+    parser.add_argument("--spatial-layers", type=int, default=2)
+    parser.add_argument("--gate-hidden", type=int, default=32)
     parser.add_argument("--train-limit", type=int)
     parser.add_argument("--val-limit", type=int)
     parser.add_argument("--test-limit", type=int)
@@ -493,6 +518,11 @@ def main() -> None:
         "dropout": args.dropout,
         "hidden_channels": args.hidden_channels_2d,
         "depth": args.depth_2d,
+        "filters": args.filters,
+        "lstm_hidden": args.lstm_hidden,
+        "lstm_layers": args.lstm_layers,
+        "spatial_layers": args.spatial_layers,
+        "gate_hidden": args.gate_hidden,
     }
     model = build_external_baseline(args.model, model_cfg)
     model, device_ids = maybe_wrap_data_parallel(model, device, device_ids)

@@ -1,0 +1,380 @@
+{
+  "scenario_count": 10,
+  "scenarios": [
+    {
+      "name": "Light Gaussian",
+      "slug": "light_gaussian",
+      "sample_count": 150,
+      "snr_range": [
+        30.0,
+        38.0
+      ],
+      "fixed_recipe": "gaussian",
+      "recipe_kind": null,
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 150,
+        "recipe_frequency_max": 150,
+        "recipe_length_hist": {
+          "1": 150
+        },
+        "component_frequency": {
+          "gaussian": 150
+        },
+        "extreme_event_count": 30,
+        "quality_warning_count": 0,
+        "snr_db_mean": 33.801053414288184,
+        "snr_db_p01": 30.136720487240062,
+        "snr_db_p05": 30.38031374837721,
+        "snr_db_p50": 33.489794425443634,
+        "snr_db_p95": 37.52257033822904,
+        "snr_db_p99": 37.75957887806173,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Low-SNR Gaussian",
+      "slug": "low_snr_gaussian",
+      "sample_count": 350,
+      "snr_range": [
+        6.0,
+        14.0
+      ],
+      "fixed_recipe": "gaussian",
+      "recipe_kind": null,
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 350,
+        "recipe_frequency_max": 350,
+        "recipe_length_hist": {
+          "1": 350
+        },
+        "component_frequency": {
+          "gaussian": 350
+        },
+        "extreme_event_count": 79,
+        "quality_warning_count": 0,
+        "snr_db_mean": 9.93266408630624,
+        "snr_db_p01": 6.094393992927936,
+        "snr_db_p05": 6.473509181096452,
+        "snr_db_p50": 9.918443039288157,
+        "snr_db_p95": 13.617605790796906,
+        "snr_db_p99": 13.954705843167579,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Colored background",
+      "slug": "colored_background",
+      "sample_count": 200,
+      "snr_range": [
+        10.0,
+        22.0
+      ],
+      "fixed_recipe": "background",
+      "recipe_kind": null,
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 200,
+        "recipe_frequency_max": 200,
+        "recipe_length_hist": {
+          "1": 200
+        },
+        "component_frequency": {
+          "background": 200
+        },
+        "extreme_event_count": 36,
+        "quality_warning_count": 0,
+        "snr_db_mean": 15.769078917085704,
+        "snr_db_p01": 10.245532047371789,
+        "snr_db_p05": 10.756355554775027,
+        "snr_db_p50": 15.35917291843397,
+        "snr_db_p95": 21.183996198201246,
+        "snr_db_p99": 21.743813605072095,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "EM interference",
+      "slug": "em_interference",
+      "sample_count": 200,
+      "snr_range": [
+        10.0,
+        22.0
+      ],
+      "fixed_recipe": "em",
+      "recipe_kind": null,
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 200,
+        "recipe_frequency_max": 200,
+        "recipe_length_hist": {
+          "1": 200
+        },
+        "component_frequency": {
+          "em": 200
+        },
+        "extreme_event_count": 45,
+        "quality_warning_count": 0,
+        "snr_db_mean": 16.02218310463961,
+        "snr_db_p01": 10.279258214625111,
+        "snr_db_p05": 10.761064264966047,
+        "snr_db_p50": 15.91985677138422,
+        "snr_db_p95": 21.33722999895023,
+        "snr_db_p99": 21.76296602824538,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Impulse spike",
+      "slug": "impulse_spike",
+      "sample_count": 200,
+      "snr_range": [
+        10.0,
+        24.0
+      ],
+      "fixed_recipe": "impulse",
+      "recipe_kind": null,
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 200,
+        "recipe_frequency_max": 200,
+        "recipe_length_hist": {
+          "1": 200
+        },
+        "component_frequency": {
+          "impulse": 200
+        },
+        "extreme_event_count": 43,
+        "quality_warning_count": 0,
+        "snr_db_mean": 16.75338084971387,
+        "snr_db_p01": 10.034391254358995,
+        "snr_db_p05": 10.313488383468489,
+        "snr_db_p50": 16.732703555650474,
+        "snr_db_p95": 22.94991116369773,
+        "snr_db_p99": 23.77595939784056,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Drift",
+      "slug": "drift",
+      "sample_count": 200,
+      "snr_range": [
+        12.0,
+        26.0
+      ],
+      "fixed_recipe": "drift",
+      "recipe_kind": null,
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 200,
+        "recipe_frequency_max": 200,
+        "recipe_length_hist": {
+          "1": 200
+        },
+        "component_frequency": {
+          "drift": 200
+        },
+        "extreme_event_count": 39,
+        "quality_warning_count": 0,
+        "snr_db_mean": 18.87820807348922,
+        "snr_db_p01": 12.354932593842696,
+        "snr_db_p05": 12.981442035875496,
+        "snr_db_p50": 18.546602502300132,
+        "snr_db_p95": 25.009413122039675,
+        "snr_db_p99": 25.699954258666533,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Local receiver corruption",
+      "slug": "local_receiver_corruption",
+      "sample_count": 350,
+      "snr_range": [
+        8.0,
+        22.0
+      ],
+      "fixed_recipe": "glitch",
+      "recipe_kind": null,
+      "forced_glitch_mode": "bad_channel",
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 350,
+        "recipe_frequency_max": 350,
+        "recipe_length_hist": {
+          "1": 350
+        },
+        "component_frequency": {
+          "glitch": 350
+        },
+        "extreme_event_count": 77,
+        "quality_warning_count": 0,
+        "snr_db_mean": 14.96795096241695,
+        "snr_db_p01": 8.061904432272884,
+        "snr_db_p05": 8.680991973093771,
+        "snr_db_p50": 14.488984690491224,
+        "snr_db_p95": 21.34868244000754,
+        "snr_db_p99": 21.932651834990022,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Dropout / missing segment",
+      "slug": "dropout_missing_segment",
+      "sample_count": 350,
+      "snr_range": [
+        8.0,
+        22.0
+      ],
+      "fixed_recipe": "glitch",
+      "recipe_kind": null,
+      "forced_glitch_mode": "dropout",
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 1,
+        "recipe_frequency_min": 350,
+        "recipe_frequency_max": 350,
+        "recipe_length_hist": {
+          "1": 350
+        },
+        "component_frequency": {
+          "glitch": 350
+        },
+        "extreme_event_count": 72,
+        "quality_warning_count": 0,
+        "snr_db_mean": 15.004893359354371,
+        "snr_db_p01": 8.27582564088552,
+        "snr_db_p05": 8.86711903285294,
+        "snr_db_p50": 15.041540294321655,
+        "snr_db_p95": 21.082947293616126,
+        "snr_db_p99": 21.78032698358607,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Mixed complex noise",
+      "slug": "mixed_complex_noise",
+      "sample_count": 350,
+      "snr_range": [
+        6.0,
+        20.0
+      ],
+      "fixed_recipe": null,
+      "recipe_kind": "mixed_complex",
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": false,
+      "quality_summary": {
+        "recipe_count_unique": 55,
+        "recipe_frequency_min": 6,
+        "recipe_frequency_max": 7,
+        "recipe_length_hist": {
+          "4": 183,
+          "5": 121,
+          "6": 46
+        },
+        "component_frequency": {
+          "background": 222,
+          "drift": 229,
+          "em": 224,
+          "gaussian": 234,
+          "glitch": 232,
+          "impulse": 227,
+          "sferic": 245
+        },
+        "extreme_event_count": 60,
+        "quality_warning_count": 0,
+        "snr_db_mean": 13.018920977000182,
+        "snr_db_p01": 6.12546468099417,
+        "snr_db_p05": 6.4977288977107905,
+        "snr_db_p50": 13.302372446332793,
+        "snr_db_p95": 19.17502409602275,
+        "snr_db_p99": 19.91038735010768,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    },
+    {
+      "name": "Unseen noise combination",
+      "slug": "unseen_noise_combination",
+      "sample_count": 150,
+      "snr_range": [
+        8.0,
+        22.0
+      ],
+      "fixed_recipe": null,
+      "recipe_kind": "unseen_only",
+      "forced_glitch_mode": null,
+      "is_unseen_recipe": true,
+      "quality_summary": {
+        "recipe_count_unique": 8,
+        "recipe_frequency_min": 18,
+        "recipe_frequency_max": 19,
+        "recipe_length_hist": {
+          "4": 113,
+          "5": 37
+        },
+        "component_frequency": {
+          "background": 112,
+          "drift": 93,
+          "em": 113,
+          "gaussian": 75,
+          "glitch": 95,
+          "impulse": 112,
+          "sferic": 37
+        },
+        "extreme_event_count": 31,
+        "quality_warning_count": 0,
+        "snr_db_mean": 15.468790398342337,
+        "snr_db_p01": 8.354088926416317,
+        "snr_db_p05": 8.734948071689509,
+        "snr_db_p50": 15.78425618925388,
+        "snr_db_p95": 21.135305737949068,
+        "snr_db_p99": 21.33580316353079,
+        "clip_fraction_mean": 0.0,
+        "clip_fraction_max": 0.0,
+        "resample_attempt_mean": 1.0,
+        "resample_attempt_max": 1
+      }
+    }
+  ]
+}

@@ -146,12 +146,12 @@ def maybe_wrap_data_parallel(
 def canonicalize_11t(array: np.ndarray, name: str) -> np.ndarray:
     arr = np.asarray(array, dtype=np.float32)
     if arr.ndim != 3:
-        raise ValueError(f'{name}: expected 3D array (N,11,T), got {arr.shape}')
-    if arr.shape[1] == 11:
+        raise ValueError(f'{name}: expected 3D array (N,R,T), got {arr.shape}')
+    if arr.shape[2] == 869:
         return arr
-    if arr.shape[2] == 11:
+    if arr.shape[1] == 869:
         return np.transpose(arr, (0, 2, 1))
-    raise ValueError(f'{name}: unsupported shape {arr.shape}, expected one axis to be 11')
+    raise ValueError(f'{name}: unsupported shape {arr.shape}, expected one time axis of length 869')
 
 
 def limit_samples(array: np.ndarray, max_samples: int | None) -> np.ndarray:
@@ -213,13 +213,15 @@ def evaluate_model(
     device: torch.device,
     model_type: str,
     oracle_margin: float = 0.0,
+    sample_rrmse_sink: list[np.ndarray] | None = None,
 ) -> tuple[MetricPack, dict[str, Any] | None]:
     criterion = nn.MSELoss()
     model.eval()
-    losses: list[float] = []
-    rmses: list[float] = []
-    rrmses: list[float] = []
-    snrs: list[float] = []
+    n_samples = 0
+    loss_sum = 0.0
+    rmse_sum = 0.0
+    rrmse_sum = 0.0
+    snr_sum = 0.0
     analysis_sums: dict[str, float] | None = None
     analysis_counts: dict[str, int] | None = None
     analysis_extrema: dict[str, float] | None = None
@@ -301,17 +303,21 @@ def evaluate_model(
                     analysis_counts['effective_gate'] += int(effective_residual_gate.numel())
             else:
                 pred = model(noisy)
-            losses.append(float(criterion(pred, clean).item()))
+            batch_size = int(clean.shape[0])
+            n_samples += batch_size
+            loss_sum += float(criterion(pred, clean).item()) * batch_size
             rmse, rrmse, snr = compute_metrics_batch(pred, clean)
-            rmses.append(float(rmse.mean().item()))
-            rrmses.append(float(rrmse.mean().item()))
-            snrs.append(float(snr.mean().item()))
+            if sample_rrmse_sink is not None:
+                sample_rrmse_sink.append(rrmse.detach().cpu().numpy())
+            rmse_sum += float(rmse.sum().item())
+            rrmse_sum += float(rrmse.sum().item())
+            snr_sum += float(snr.sum().item())
 
     metrics = MetricPack(
-        loss=float(np.mean(losses)) if losses else float('nan'),
-        rmse=float(np.mean(rmses)) if rmses else float('nan'),
-        rrmse=float(np.mean(rrmses)) if rrmses else float('nan'),
-        snr=float(np.mean(snrs)) if snrs else float('nan'),
+        loss=loss_sum / n_samples if n_samples else float('nan'),
+        rmse=rmse_sum / n_samples if n_samples else float('nan'),
+        rrmse=rrmse_sum / n_samples if n_samples else float('nan'),
+        snr=snr_sum / n_samples if n_samples else float('nan'),
     )
     if analysis_sums is None or analysis_counts is None or analysis_extrema is None:
         return metrics, None
@@ -503,6 +509,7 @@ def evaluate_scenario(
     oracle_margin: float,
     spatial_base_cache_path: Path | None = None,
     single_base_cache_path: Path | None = None,
+    sample_metrics_path: Path | None = None,
 ) -> dict[str, Any]:
     dataset, shape = build_dataset(
         data_path,
@@ -518,7 +525,14 @@ def evaluate_scenario(
         num_workers=num_workers,
         pin_memory=(device.type == 'cuda'),
     )
-    metrics, analysis = evaluate_model(model, loader, device, model_type, oracle_margin=oracle_margin)
+    sample_rrmse: list[np.ndarray] | None = [] if sample_metrics_path is not None else None
+    metrics, analysis = evaluate_model(
+        model, loader, device, model_type, oracle_margin=oracle_margin,
+        sample_rrmse_sink=sample_rrmse,
+    )
+    if sample_metrics_path is not None and sample_rrmse is not None:
+        sample_metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(sample_metrics_path, rrmse=np.concatenate(sample_rrmse))
     result = {
         'shape': list(shape),
         'sample_count': int(shape[0]),
@@ -615,6 +629,7 @@ def main() -> None:
             oracle_margin=oracle_margin,
             spatial_base_cache_path=combined_spatial_cache,
             single_base_cache_path=combined_single_cache,
+            sample_metrics_path=args.output_dir / 'sample_metrics' / 'combined_test.npz',
         )
 
     for spec in load_scenario_specs(args.data_root):
@@ -641,6 +656,7 @@ def main() -> None:
             oracle_margin=oracle_margin,
             spatial_base_cache_path=scenario_spatial_cache,
             single_base_cache_path=scenario_single_cache,
+            sample_metrics_path=args.output_dir / 'sample_metrics' / f'{slug}.npz',
         )
         scenario_results[slug] = {
             'scenario_name': scenario_name,

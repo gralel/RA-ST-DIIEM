@@ -1,0 +1,158 @@
+{
+  "n5_s50": {
+    "receiver_indices_zero_based": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "receiver_indices_one_based": [
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "receiver_count": 5,
+    "receiver_positions_m_relative_to_center": [
+      -100.0,
+      -50.0,
+      0.0,
+      50.0,
+      100.0
+    ],
+    "adjacent_spacings_m": [
+      50.0,
+      50.0,
+      50.0,
+      50.0
+    ],
+    "uniform_spacing_m": 50.0
+  },
+  "n7_s50": {
+    "receiver_indices_zero_based": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "receiver_indices_one_based": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "receiver_count": 7,
+    "receiver_positions_m_relative_to_center": [
+      -150.0,
+      -100.0,
+      -50.0,
+      0.0,
+      50.0,
+      100.0,
+      150.0
+    ],
+    "adjacent_spacings_m": [
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0
+    ],
+    "uniform_spacing_m": 50.0
+  },
+  "n5_s100": {
+    "receiver_indices_zero_based": [
+      1,
+      3,
+      5,
+      7,
+      9
+    ],
+    "receiver_indices_one_based": [
+      2,
+      4,
+      6,
+      8,
+      10
+    ],
+    "receiver_count": 5,
+    "receiver_positions_m_relative_to_center": [
+      -200.0,
+      -100.0,
+      0.0,
+      100.0,
+      200.0
+    ],
+    "adjacent_spacings_m": [
+      100.0,
+      100.0,
+      100.0,
+      100.0
+    ],
+    "uniform_spacing_m": 100.0
+  },
+  "n11_s50": {
+    "receiver_indices_zero_based": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "receiver_indices_one_based": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "receiver_count": 11,
+    "receiver_positions_m_relative_to_center": [
+      -250.0,
+      -200.0,
+      -150.0,
+      -100.0,
+      -50.0,
+      0.0,
+      50.0,
+      100.0,
+      150.0,
+      200.0,
+      250.0
+    ],
+    "adjacent_spacings_m": [
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0,
+      50.0
+    ],
+    "uniform_spacing_m": 50.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "dataset_profile": "paper_fixed_scenarios_25k",
+  "input_mode": "multi_clean_model_txt",
+  "sample_counts": {
+    "train": 20000,
+    "val": 2500,
+    "test": 2500
+  },
+  "model_counts": {
+    "train": 2895,
+    "val": 365,
+    "test": 365
+  },
+  "model_ratios": {
+    "train": 0.8,
+    "val": 0.1,
+    "test": 0.1
+  },
+  "scenario_test_enabled": true,
+  "held_out_unseen_recipes": [
+    "background+drift+em+gaussian+impulse",
+    "background+drift+em+glitch",
+    "background+drift+em+glitch+impulse",
+    "background+drift+gaussian+impulse",
+    "background+drift+impulse+sferic",
+    "background+em+gaussian+glitch",
+    "em+gaussian+glitch+impulse",
+    "em+glitch+impulse+sferic"
+  ],
+  "leakage_check": {
+    "train__val": 0,
+    "train__test": 0,
+    "val__test": 0
+  }
+}

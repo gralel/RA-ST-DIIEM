@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 from dataclasses import dataclass
@@ -54,6 +55,7 @@ class MetricPack:
 class LossConfig:
     lambda_rec: float = 1.0
     lambda_rel: float = 0.1
+    relative_loss_mode: str = "global_energy"
     lambda_gate: float = 0.001
     lambda_residual_x0: float = 0.5
     lambda_anchor_residual: float = 0.5
@@ -64,10 +66,11 @@ class LossConfig:
     router_oracle_temperature: float = 0.01
     oracle_margin: float = 0.0
 
-    def to_dict(self) -> dict[str, float]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "lambda_rec": self.lambda_rec,
             "lambda_rel": self.lambda_rel,
+            "relative_loss_mode": self.relative_loss_mode,
             "lambda_gate": self.lambda_gate,
             "lambda_residual_x0": self.lambda_residual_x0,
             "lambda_anchor_residual": self.lambda_anchor_residual,
@@ -224,12 +227,12 @@ def load_array_memmap(path: Path) -> np.ndarray:
 def canonicalize_batch_11t(batch: np.ndarray, name: str) -> np.ndarray:
     arr = np.asarray(batch, dtype=np.float32)
     if arr.ndim != 3:
-        raise ValueError(f"{name}: expected 3D array (N,11,T), got {arr.shape}")
-    if arr.shape[1] == 11:
+        raise ValueError(f"{name}: expected 3D array (N,R,T), got {arr.shape}")
+    if arr.shape[2] == 869:
         return arr
-    if arr.shape[2] == 11:
+    if arr.shape[1] == 869:
         return np.transpose(arr, (0, 2, 1))
-    raise ValueError(f"{name}: unsupported shape {arr.shape}, expected one axis to be 11")
+    raise ValueError(f"{name}: unsupported shape {arr.shape}, expected one time axis of length 869")
 
 
 def to_log10_amplitude(array: np.ndarray) -> np.ndarray:
@@ -281,9 +284,36 @@ def compute_eval_loss(
     pred_amp = from_log10_amplitude_tensor(pred_log10)
     clean_amp = from_log10_amplitude_tensor(clean_log10)
     loss_rec = F.l1_loss(pred_amp, clean_amp)
-    loss_rel = torch.mean((pred_amp - clean_amp).pow(2) / (clean_amp.pow(2) + EPS))
+    loss_rel = compute_relative_amplitude_loss(
+        pred_amp,
+        clean_amp,
+        mode=loss_config.relative_loss_mode,
+    )
     loss_gate = torch.mean(torch.abs(gate))
     return loss_mse + loss_config.lambda_rec * loss_rec + loss_config.lambda_rel * loss_rel + loss_config.lambda_gate * loss_gate
+
+
+def compute_relative_amplitude_loss(
+    pred_amp: torch.Tensor,
+    clean_amp: torch.Tensor,
+    mode: str = "global_energy",
+) -> torch.Tensor:
+    """Return a squared relative-amplitude loss.
+
+    ``global_energy`` averages squared sample-wise RRMSE using the metric's
+    global-energy denominator (apart from stabilizer scaling). It avoids
+    assigning unbounded weight to late-time gates with near-zero targets.
+    ``elementwise`` preserves the loss used by the originally submitted
+    manuscript and is retained only for a controlled reviewer ablation.
+    """
+    squared_error = (pred_amp - clean_amp).pow(2)
+    if mode == "global_energy":
+        numerator = squared_error.sum(dim=(1, 2))
+        denominator = clean_amp.pow(2).sum(dim=(1, 2)) + EPS
+        return (numerator / denominator).mean()
+    if mode == "elementwise":
+        return torch.mean(squared_error / (clean_amp.pow(2) + EPS))
+    raise ValueError(f"Unsupported relative loss mode: {mode!r}")
 
 
 def _mean_or_zero(values: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:
@@ -379,7 +409,11 @@ def compute_total_loss(
     clean_amp = from_log10_amplitude_tensor(clean_log10)
     loss_mse = F.mse_loss(pred_log10, clean_log10)
     loss_rec = F.l1_loss(pred_amp, clean_amp)
-    loss_rel = torch.mean((pred_amp - clean_amp).pow(2) / (clean_amp.pow(2) + EPS))
+    loss_rel = compute_relative_amplitude_loss(
+        pred_amp,
+        clean_amp,
+        mode=loss_config.relative_loss_mode,
+    )
     loss_gate = torch.mean(torch.abs(gate))
     receiver_gate = aux.get("receiver_gate")
     temporal_gate = aux.get("temporal_gate")
@@ -446,10 +480,11 @@ def evaluate_model(
     loss_config: LossConfig,
 ) -> MetricPack:
     model.eval()
-    losses: list[float] = []
-    rmses: list[float] = []
-    rrmses: list[float] = []
-    snrs: list[float] = []
+    n_samples = 0
+    loss_sum = 0.0
+    rmse_sum = 0.0
+    rrmse_sum = 0.0
+    snr_sum = 0.0
 
     with torch.no_grad():
         for batch in loader:
@@ -464,17 +499,19 @@ def evaluate_model(
                 single_base_log=single_base,
                 return_aux=True,
             )
-            losses.append(float(compute_eval_loss(pred, clean, aux["gate"], loss_config).item()))
+            batch_size = int(clean.shape[0])
+            n_samples += batch_size
+            loss_sum += float(compute_eval_loss(pred, clean, aux["gate"], loss_config).item()) * batch_size
             rmse, rrmse, snr = compute_metrics_batch(pred, clean)
-            rmses.append(float(rmse.mean().item()))
-            rrmses.append(float(rrmse.mean().item()))
-            snrs.append(float(snr.mean().item()))
+            rmse_sum += float(rmse.sum().item())
+            rrmse_sum += float(rrmse.sum().item())
+            snr_sum += float(snr.sum().item())
 
     return MetricPack(
-        loss=float(np.mean(losses)) if losses else float("nan"),
-        rmse=float(np.mean(rmses)) if rmses else float("nan"),
-        rrmse=float(np.mean(rrmses)) if rrmses else float("nan"),
-        snr=float(np.mean(snrs)) if snrs else float("nan"),
+        loss=loss_sum / n_samples if n_samples else float("nan"),
+        rmse=rmse_sum / n_samples if n_samples else float("nan"),
+        rrmse=rrmse_sum / n_samples if n_samples else float("nan"),
+        snr=snr_sum / n_samples if n_samples else float("nan"),
     )
 
 
@@ -511,16 +548,17 @@ def prepare_base_cache(
     count = total_count if limit is None or limit <= 0 or limit >= total_count else int(limit)
 
     sample0 = canonicalize_batch_11t(np.asarray(source[:1]), str(data_path))
-    if sample0.shape[1] != 11 or sample0.shape[2] != 869:
-        raise ValueError(f"{data_path}: expected (*,11,869), got {sample0.shape}")
+    if sample0.shape[2] != 869:
+        raise ValueError(f"{data_path}: expected (*,R,869), got {sample0.shape}")
 
-    target_shape = (count, 11, 869)
+    target_shape = (count, int(sample0.shape[1]), int(sample0.shape[2]))
     ensure_dir(cache_path.parent)
     needs_rebuild = True
     if cache_path.exists():
         try:
             existing = np.load(cache_path, mmap_mode="r")
             needs_rebuild = tuple(int(v) for v in existing.shape) != target_shape
+            del existing
         except Exception:
             needs_rebuild = True
     if not needs_rebuild:
@@ -528,7 +566,8 @@ def prepare_base_cache(
 
     adapter = adapter.to(device)
     adapter.eval()
-    cache = np.lib.format.open_memmap(cache_path, mode="w+", dtype=np.float32, shape=target_shape)
+    partial_path = cache_path.with_name(cache_path.name + ".partial")
+    cache = np.lib.format.open_memmap(partial_path, mode="w+", dtype=np.float32, shape=target_shape)
     with torch.no_grad():
         for start in range(0, count, batch_size):
             end = min(start + batch_size, count)
@@ -537,7 +576,9 @@ def prepare_base_cache(
             noisy_tensor = torch.from_numpy(noisy_log).to(device)
             pred = adapter(noisy_tensor).detach().cpu().numpy().astype(np.float32)
             cache[start:end] = pred
+    cache.flush()
     del cache
+    os.replace(partial_path, cache_path)
     return target_shape, cache_path
 
 
@@ -984,6 +1025,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selection-metric", choices=SELECTION_METRICS, default="rrmse")
     parser.add_argument("--lambda-rec", type=float, default=1.0)
     parser.add_argument("--lambda-rel", type=float, default=0.1)
+    parser.add_argument(
+        "--relative-loss-mode",
+        choices=("global_energy", "elementwise"),
+        default="global_energy",
+        help=(
+            "Relative-amplitude loss normalization. global_energy uses the "
+            "metric's sample-wise energy basis but averages squared sample RRMSE; "
+            "elementwise reproduces the "
+            "original submission for ablation."
+        ),
+    )
     parser.add_argument("--lambda-gate", type=float, default=0.001)
     parser.add_argument("--lambda-residual-x0", type=float, default=0.5)
     parser.add_argument("--lambda-anchor-residual", type=float, default=0.5)
@@ -1195,6 +1247,7 @@ def main() -> None:
     loss_config = LossConfig(
         lambda_rec=args.lambda_rec,
         lambda_rel=args.lambda_rel,
+        relative_loss_mode=args.relative_loss_mode,
         lambda_gate=args.lambda_gate,
         lambda_residual_x0=args.lambda_residual_x0,
         lambda_anchor_residual=args.lambda_anchor_residual,

@@ -68,9 +68,9 @@ class SinusoidalStepEmbedding(nn.Module):
 
 
 class FrozenSpatialAdapter(nn.Module):
-    """Frozen Spatial PC-BiLSTM used as a deterministic base denoiser."""
+    """Frozen receiver-aware denoiser used as a deterministic base."""
 
-    def __init__(self, spatial_model: SpatialReceiverPCBiLSTM):
+    def __init__(self, spatial_model: nn.Module):
         super().__init__()
         self.model = spatial_model.eval()
         for param in self.model.parameters():
@@ -87,18 +87,26 @@ class FrozenSpatialAdapter(nn.Module):
 
         run_config = load_json(run_config_path)
         model_cfg = dict(run_config.get("model", {}))
-        spatial_model = SpatialReceiverPCBiLSTM(
-            seq_len=int(model_cfg.get("seq_len", 869)),
-            num_receivers=int(model_cfg.get("num_receivers", 11)),
-            filters=int(model_cfg.get("filters", 16)),
-            lstm_hidden=int(model_cfg.get("lstm_hidden", 32)),
-            lstm_layers=int(model_cfg.get("lstm_layers", 2)),
-            num_heads=int(model_cfg.get("num_heads", 4)),
-            spatial_layers=int(model_cfg.get("spatial_layers", 2)),
-            dropout=float(model_cfg.get("dropout", 0.1)),
-            use_graph_bias=bool(model_cfg.get("use_graph_bias", True)),
-            residual=bool(model_cfg.get("residual", True)),
-        )
+        if run_config.get("model_type") == "external_baseline":
+            model_name = run_config.get("model_name")
+            if model_name != "dncnn2d":
+                raise ValueError(f"Unsupported heterogeneous spatial expert: {model_name}")
+            from .external_baselines import build_external_baseline
+
+            spatial_model = build_external_baseline(model_name, model_cfg)
+        else:
+            spatial_model = SpatialReceiverPCBiLSTM(
+                seq_len=int(model_cfg.get("seq_len", 869)),
+                num_receivers=int(model_cfg.get("num_receivers", 11)),
+                filters=int(model_cfg.get("filters", 16)),
+                lstm_hidden=int(model_cfg.get("lstm_hidden", 32)),
+                lstm_layers=int(model_cfg.get("lstm_layers", 2)),
+                num_heads=int(model_cfg.get("num_heads", 4)),
+                spatial_layers=int(model_cfg.get("spatial_layers", 2)),
+                dropout=float(model_cfg.get("dropout", 0.1)),
+                use_graph_bias=bool(model_cfg.get("use_graph_bias", True)),
+                residual=bool(model_cfg.get("residual", True)),
+            )
         payload = _load_checkpoint_payload(checkpoint_path)
         spatial_model.load_state_dict(_extract_state_dict(payload))
         return cls(spatial_model), run_config

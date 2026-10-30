@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+from .single_receiver_pcbilstm import IndependentReceiverPCBiLSTM
+from .spatial_receiver_pcbilstm import SpatialReceiverPCBiLSTM
 
 
 class ConvBlock1D(nn.Module):
@@ -130,6 +134,104 @@ class DnCNN2DReceiverTime(nn.Module):
         return correction
 
 
+class TEMDnetStyle2D(nn.Module):
+    """Signal-to-image TEMDnet-style adaptation for a receiver-time tensor.
+
+    Each receiver trace is zero-padded to a square image, denoised by a shared
+    residual 2-D CNN, and mapped back to the original time samples.  The model
+    is intentionally described as an adaptation, rather than an exact
+    reproduction, because the public TEMDnet demo uses a different data layout.
+    """
+
+    def __init__(self, seq_len: int = 869, hidden_channels: int = 64, depth: int = 8):
+        super().__init__()
+        self.seq_len = int(seq_len)
+        self.side = int(self.seq_len**0.5)
+        if self.side * self.side < self.seq_len:
+            self.side += 1
+        layers: list[nn.Module] = [nn.Conv2d(1, hidden_channels, 3, padding=1), nn.ReLU(inplace=True)]
+        for _ in range(max(int(depth) - 2, 0)):
+            layers.extend([nn.Conv2d(hidden_channels, hidden_channels, 3, padding=1), nn.BatchNorm2d(hidden_channels), nn.ReLU(inplace=True)])
+        layers.append(nn.Conv2d(hidden_channels, 1, 3, padding=1))
+        self.noise_net = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch, receivers, length = x.shape
+        if length != self.seq_len:
+            raise ValueError(f"Expected seq_len={self.seq_len}, got {length}")
+        flat = x.reshape(batch * receivers, 1, length)
+        padded = F.pad(flat, (0, self.side * self.side - length))
+        image = padded.reshape(batch * receivers, 1, self.side, self.side)
+        clean_image = image - self.noise_net(image)
+        return clean_image.reshape(batch, receivers, -1)[..., :length]
+
+
+class TEMNLnetStyle(nn.Module):
+    """Supervised TEM-NLnet-inspired noise-prediction comparison.
+
+    The network learns the additive disturbance in receiver-time space and
+    subtracts it from the observation. It does not reproduce the published
+    method's GAN-based measured-noise learning stage; it uses the same paired
+    synthetic training protocol as the other benchmark methods.
+    """
+
+    def __init__(self, hidden_channels: int = 64, depth: int = 8):
+        super().__init__()
+        layers: list[nn.Module] = [nn.Conv2d(1, hidden_channels, 3, padding=1), nn.LeakyReLU(0.1, inplace=True)]
+        for _ in range(max(int(depth) - 2, 0)):
+            layers.extend([nn.Conv2d(hidden_channels, hidden_channels, 3, padding=1), nn.InstanceNorm2d(hidden_channels, affine=True), nn.LeakyReLU(0.1, inplace=True)])
+        layers.append(nn.Conv2d(hidden_channels, 1, 3, padding=1))
+        self.noise_net = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        predicted_noise = self.noise_net(x.unsqueeze(1)).squeeze(1)
+        return x - predicted_noise
+
+
+class JointGatedMoEPCBiLSTM(nn.Module):
+    """Jointly trained single/spatial PC-BiLSTM experts with a learned gate."""
+
+    def __init__(
+        self,
+        seq_len: int = 869,
+        num_receivers: int = 11,
+        filters: int = 16,
+        lstm_hidden: int = 32,
+        lstm_layers: int = 2,
+        num_heads: int = 4,
+        spatial_layers: int = 2,
+        dropout: float = 0.1,
+        gate_hidden: int = 32,
+    ):
+        super().__init__()
+        self.independent_expert = IndependentReceiverPCBiLSTM(
+            seq_len=seq_len, num_receivers=num_receivers, filters=filters,
+            lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, num_heads=num_heads,
+        )
+        self.spatial_expert = SpatialReceiverPCBiLSTM(
+            seq_len=seq_len, num_receivers=num_receivers, filters=filters,
+            lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, num_heads=num_heads,
+            spatial_layers=spatial_layers, dropout=dropout,
+        )
+        self.gate = nn.Sequential(
+            nn.Conv1d(6, gate_hidden, 5, padding=2), nn.SiLU(),
+            nn.Conv1d(gate_hidden, gate_hidden, 3, padding=1), nn.SiLU(),
+            nn.AdaptiveAvgPool1d(1), nn.Conv1d(gate_hidden, 1, 1), nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        independent = self.independent_expert(x)
+        spatial = self.spatial_expert(x)
+        gate_input = torch.stack(
+            (x, independent, spatial, independent - spatial, (x - independent).abs(), (x - spatial).abs()),
+            dim=2,
+        )
+        batch, receivers, channels, length = gate_input.shape
+        weight = self.gate(gate_input.reshape(batch * receivers, channels, length))
+        weight = weight.reshape(batch, receivers, 1)
+        return spatial + weight * (independent - spatial)
+
+
 def build_external_baseline(name: str, model_config: dict | None = None) -> nn.Module:
     cfg = dict(model_config or {})
     if name == "tem1dformer869":
@@ -146,5 +248,28 @@ def build_external_baseline(name: str, model_config: dict | None = None) -> nn.M
             depth=int(cfg.get("depth", 8)),
             kernel_size=int(cfg.get("kernel_size", 3)),
             residual_prediction=bool(cfg.get("residual_prediction", True)),
+        )
+    if name == "temdnet_style":
+        return TEMDnetStyle2D(
+            seq_len=int(cfg.get("seq_len", 869)),
+            hidden_channels=int(cfg.get("hidden_channels", 64)),
+            depth=int(cfg.get("depth", 8)),
+        )
+    if name == "temnlnet_style":
+        return TEMNLnetStyle(
+            hidden_channels=int(cfg.get("hidden_channels", 64)),
+            depth=int(cfg.get("depth", 8)),
+        )
+    if name == "joint_gated_moe":
+        return JointGatedMoEPCBiLSTM(
+            seq_len=int(cfg.get("seq_len", 869)),
+            num_receivers=int(cfg.get("num_receivers", 11)),
+            filters=int(cfg.get("filters", 16)),
+            lstm_hidden=int(cfg.get("lstm_hidden", 32)),
+            lstm_layers=int(cfg.get("lstm_layers", 2)),
+            num_heads=int(cfg.get("num_heads", 4)),
+            spatial_layers=int(cfg.get("spatial_layers", 2)),
+            dropout=float(cfg.get("dropout", 0.1)),
+            gate_hidden=int(cfg.get("gate_hidden", 32)),
         )
     raise KeyError(f"Unknown external baseline: {name}")

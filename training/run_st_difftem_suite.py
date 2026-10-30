@@ -72,7 +72,10 @@ def ensure_dataset_exists(data_root: Path) -> None:
 
 def ensure_baselines_exist(baseline_root: Path) -> None:
     missing: list[str] = []
-    for model_dir in BASELINE_SPECS.values():
+    # The reliability model consumes the independent and spatial experts only.
+    # The multi-receiver baseline is optional for reduced-geometry ablations.
+    for model_key in ("single", "spatial"):
+        model_dir = BASELINE_SPECS[model_key]
         root = baseline_root / model_dir
         for name in ("training_summary.json", "test_metrics.json", "scenario_metrics.json"):
             path = root / name
@@ -102,6 +105,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baseline-root", type=Path, default=DEFAULT_BASELINE_ROOT)
     parser.add_argument("--artifacts-root", "--output-root", dest="artifacts_root", type=Path, default=DEFAULT_ARTIFACTS_ROOT)
     parser.add_argument("--spatial-enhanced-root", type=Path, default=DEFAULT_SPATIAL_ENHANCED_ROOT)
+    parser.add_argument(
+        "--skip-spatial-enhanced",
+        action="store_true",
+        help="Skip the unrelated spatial enhanced-loss ablation.",
+    )
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
     parser.add_argument("--variants", type=str, default="spatial_base,hybrid_base")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
@@ -118,6 +126,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selection-metric", choices=("loss", "rmse", "rrmse", "snr"), default="rrmse")
     parser.add_argument("--lambda-rec", type=float, default=1.0)
     parser.add_argument("--lambda-rel", type=float, default=0.1)
+    parser.add_argument(
+        "--relative-loss-mode",
+        choices=("global_energy", "elementwise"),
+        default="global_energy",
+    )
     parser.add_argument("--lambda-gate", type=float, default=0.001)
     parser.add_argument("--lambda-residual-x0", type=float, default=0.5)
     parser.add_argument("--lambda-anchor-residual", type=float, default=0.5)
@@ -152,6 +165,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-temporal-gate", action="store_true")
     parser.add_argument("--temporal-gate-init-bias", type=float, default=0.0)
     parser.add_argument("--disable-diffusion-residual", action="store_true")
+    parser.add_argument("--direct-residual-nodiff", action="store_true")
     parser.add_argument("--cache-batch-size", type=int, default=256)
     parser.add_argument("--train-limit", type=int)
     parser.add_argument("--val-limit", type=int)
@@ -188,6 +202,7 @@ def build_spatial_enhanced_train_command(args: argparse.Namespace) -> list[str]:
         "--loss-profile", "enhanced",
         "--lambda-rec", str(args.lambda_rec),
         "--lambda-rel", str(args.lambda_rel),
+        "--relative-loss-mode", str(args.relative_loss_mode),
         "--seq-len", str(args.seq_len),
         "--num-receivers", str(args.num_receivers),
         "--num-heads", str(args.num_heads),
@@ -304,6 +319,8 @@ def build_st_difftem_train_command(
         command.append("--disable-temporal-gate")
     if args.disable_diffusion_residual:
         command.append("--disable-diffusion-residual")
+    if args.direct_residual_nodiff:
+        command.append("--direct-residual-nodiff")
     if variant == "hybrid_base":
         command.extend(["--single-artifact-dir", str(args.baseline_root / BASELINE_SPECS["single"])])
     if args.device_ids is not None:
@@ -537,7 +554,7 @@ def main() -> None:
     args.artifacts_root.mkdir(parents=True, exist_ok=True)
     args.spatial_enhanced_root.mkdir(parents=True, exist_ok=True)
 
-    if not args.prepare_cache_only:
+    if not args.prepare_cache_only and not args.skip_spatial_enhanced:
         run_command(build_spatial_enhanced_train_command(args), cwd=PROJECT_ROOT)
         run_command(
             build_eval_command(
@@ -586,16 +603,19 @@ def main() -> None:
     method_averages: list[dict[str, Any]] = []
 
     for model_key, model_name in BASELINE_SPECS.items():
+        if not (args.baseline_root / model_name / "test_metrics.json").exists():
+            continue
         summary = collect_model_summary(model_key, model_name, args.baseline_root / model_name)
         model_summaries.append(summary)
         scenario_rows = iter_scenario_rows(summary)
         comparison_rows.extend(scenario_rows)
         method_averages.extend(build_method_averages(summary, scenario_rows, args.robust_score_alpha))
-    spatial_enhanced_summary = collect_model_summary("spatial_enhanced", "spatial_enhanced_loss", args.spatial_enhanced_root)
-    model_summaries.append(spatial_enhanced_summary)
-    spatial_enhanced_rows = iter_scenario_rows(spatial_enhanced_summary)
-    comparison_rows.extend(spatial_enhanced_rows)
-    method_averages.extend(build_method_averages(spatial_enhanced_summary, spatial_enhanced_rows, args.robust_score_alpha))
+    if not args.skip_spatial_enhanced:
+        spatial_enhanced_summary = collect_model_summary("spatial_enhanced", "spatial_enhanced_loss", args.spatial_enhanced_root)
+        model_summaries.append(spatial_enhanced_summary)
+        spatial_enhanced_rows = iter_scenario_rows(spatial_enhanced_summary)
+        comparison_rows.extend(spatial_enhanced_rows)
+        method_averages.extend(build_method_averages(spatial_enhanced_summary, spatial_enhanced_rows, args.robust_score_alpha))
 
     diffusion_summaries: dict[str, dict[str, Any]] = {}
     for variant, output_dir in diffusion_dirs.items():
