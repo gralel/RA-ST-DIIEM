@@ -82,6 +82,56 @@ intervals when the full per-sample metric files are available. It accepts the
 comparator and final run-directory patterns, the matching test recipe manifest,
 the scenario name, and an output path as command-line arguments.
 
+## Experimental output calibration
+
+`models/output_strength_calibrator.py` contains an optional output-strength
+calibration for frozen log-magnitude predictions. The default predicts one
+denoising strength for each receiver-time matrix; `--receiver-wise` fits a
+separate strength for every receiver trace. Both use the noisy input and model prediction;
+clean targets and noise-scenario names are used only while fitting on
+validation data. The v5 manuscript reports the receiver-wise variant separately
+from the frozen core model. The earlier core-model scores above are unchanged.
+
+Install the optional dependencies with `python -m pip install -e ".[calibration]"`.
+Supply a JSON manifest containing a `datasets` list. Each entry needs `name`,
+`role` (`validation` or `matched_validation`), `noisy`, `clean`, `prediction`,
+and `model_records_jsonl` paths. `noisy` and `clean` are physical-domain `.npy`
+arrays; `prediction` is the frozen model's log10-magnitude `.npy` output. Each
+JSONL record needs the corresponding `model_name` so five-fold validation can
+keep all corruptions of one clean model in the same fold. Then run:
+
+```bash
+python scripts/fit_output_strength_calibrator.py \
+  --manifest artifacts/calibration_manifest.json \
+  --output-dir artifacts/output_calibration \
+  --receiver-wise
+```
+
+The script writes a fitted `output_strength_calibrator.joblib` and grouped-CV
+summary. `models.output_strength_calibrator.apply_calibrator` applies the
+sample-level model if `--receiver-wise` is omitted; `apply_receiver_calibrator`
+applies the receiver-wise model shown above.
+For the validation-selected synthetic diagnostic, use
+`apply_receiver_calibrator(noisy_log, model_output_log, regressor,
+early_only=True, savgol_window=101)`. The calibration and polynomial smoothing
+taper between 65% and 70% of the gates, leaving the final 30% equal to the
+frozen model output. This protects the late-time log-MAE measured in the paper.
+The same operation is available as a command-line step after saving the frozen
+model's log-domain predictions:
+
+```bash
+python scripts/apply_receiver_calibration.py \
+  --noisy data/test_scenarios/light_gaussian/light_gaussian_data.npy \
+  --prediction artifacts/light_gaussian_prediction_log10.npy \
+  --calibrator artifacts/output_calibration/output_strength_calibrator.joblib \
+  --output artifacts/light_gaussian_calibrated_log10.npy
+```
+
+Load only a trusted local `.joblib` file. Fit and inference use
+scikit-learn 1.6.1 for the reported calibration results.
+The full synthetic dataset and pretrained model weights are required to
+reproduce publication-scale experiments; the 20-sample demo is insufficient.
+
 ## Reproducibility scope
 
 The checked benchmark comprises 25,000 paired synthetic samples: 20,000 for

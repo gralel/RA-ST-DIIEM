@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4"]
+calibration = ["scikit-learn==1.6.1", "joblib>=1.4"]
 
 [tool.setuptools]
 packages = ["models"]
