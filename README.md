@@ -82,17 +82,20 @@ intervals when the full per-sample metric files are available. It accepts the
 comparator and final run-directory patterns, the matching test recipe manifest,
 the scenario name, and an output path as command-line arguments.
 
-## Experimental output calibration
+## Final output calibration
 
-`models/output_strength_calibrator.py` contains an optional output-strength
-calibration for frozen log-magnitude predictions. The default predicts one
+`models/output_strength_calibrator.py` contains the output-strength calibration
+stage of the final reported RA-ST-DiffTEM pipeline. It acts on frozen
+log-magnitude network predictions. The default predicts one
 denoising strength for each receiver-time matrix; `--receiver-wise` fits a
 separate strength for every receiver trace. Both use the noisy input and model prediction;
 clean targets and noise-scenario names are used only while fitting on
-validation data. The v5 manuscript reports the receiver-wise variant separately
-from the frozen core model. The earlier core-model scores above are unchanged.
+validation data. The manuscript uses the receiver-wise stage for its final
+synthetic benchmark results and reports the network without calibration as an
+ablation. The preserved measured-field image uses the network output before
+this calibration stage.
 
-Install the optional dependencies with `python -m pip install -e ".[calibration]"`.
+Install the calibration dependencies with `python -m pip install -e ".[calibration]"`.
 Supply a JSON manifest containing a `datasets` list. Each entry needs `name`,
 `role` (`validation` or `matched_validation`), `noisy`, `clean`, `prediction`,
 and `model_records_jsonl` paths. `noisy` and `clean` are physical-domain `.npy`
@@ -111,7 +114,7 @@ The script writes a fitted `output_strength_calibrator.joblib` and grouped-CV
 summary. `models.output_strength_calibrator.apply_calibrator` applies the
 sample-level model if `--receiver-wise` is omitted; `apply_receiver_calibrator`
 applies the receiver-wise model shown above.
-For the validation-selected synthetic diagnostic, use
+For the reported final synthetic pipeline, use
 `apply_receiver_calibrator(noisy_log, model_output_log, regressor,
 early_only=True, savgol_window=101)`. The calibration and polynomial smoothing
 taper between 65% and 70% of the gates, leaving the final 30% equal to the
